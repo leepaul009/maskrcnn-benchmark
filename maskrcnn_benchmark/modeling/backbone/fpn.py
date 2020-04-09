@@ -26,6 +26,7 @@ class FPN(nn.Module):
         super(FPN, self).__init__()
         self.inner_blocks = []
         self.layer_blocks = []
+        # 4 input layer with C=256/512/1024/2048 => L1:C-256 L:256-256
         for idx, in_channels in enumerate(in_channels_list, 1):
             inner_block = "fpn_inner{}".format(idx)
             layer_block = "fpn_layer{}".format(idx)
@@ -48,9 +49,14 @@ class FPN(nn.Module):
             results (tuple[Tensor]): feature maps after FPN layers.
                 They are ordered from highest resolution first.
         """
+        # getattr call self's member self.inner_blocks[-1]
+        # firstly, calc and insert the output of last pyramid layer
         last_inner = getattr(self, self.inner_blocks[-1])(x[-1])
         results = []
         results.append(getattr(self, self.layer_blocks[-1])(last_inner))
+
+        # x[:-1][::-1] indicates reverse order + from second last one
+        # go throng pyramid layer top-down
         for feature, inner_block, layer_block in zip(
             x[:-1][::-1], self.inner_blocks[:-1][::-1], self.layer_blocks[:-1][::-1]
         ):
@@ -76,7 +82,7 @@ class FPN(nn.Module):
 
 class LastLevelMaxPool(nn.Module):
     def forward(self, x):
-        return [F.max_pool2d(x, 1, 2, 0)]
+        return [F.max_pool2d(x, 1, 2, 0)] # input, kernel_size, stride=None, padding=0
 
 
 class LastLevelP6P7(nn.Module):

@@ -63,9 +63,7 @@ class Pooler(nn.Module):
         poolers = []
         for scale in scales:
             poolers.append(
-                ROIAlign(
-                    output_size, spatial_scale=scale, sampling_ratio=sampling_ratio
-                )
+                ROIAlign(output_size, spatial_scale=scale, sampling_ratio=sampling_ratio)
             )
         self.poolers = nn.ModuleList(poolers)
         self.output_size = output_size
@@ -78,16 +76,19 @@ class Pooler(nn.Module):
     def convert_to_roi_format(self, boxes):
         concat_boxes = cat([b.bbox for b in boxes], dim=0)
         device, dtype = concat_boxes.device, concat_boxes.dtype
+        # ids list[BoxList],listSize=N
+        # Tensor.shape=[10AHW,4] that filled with list index(ex.0,1,...)
         ids = cat(
             [
                 torch.full((len(b), 1), i, dtype=dtype, device=device)
-                for i, b in enumerate(boxes)
+                for i, b in enumerate(boxes) # index and tensor 
             ],
             dim=0,
         )
-        rois = torch.cat([ids, concat_boxes], dim=1)
+        rois = torch.cat([ids, concat_boxes], dim=1) # Nx2xBoxList
         return rois
 
+    # boxes list[BoxList], listSize=N, BoxList.bbox is Tensor and shape=[10AHW, 4]
     def forward(self, x, boxes):
         """
         Arguments:
@@ -103,13 +104,13 @@ class Pooler(nn.Module):
 
         levels = self.map_levels(boxes)
 
-        num_rois = len(rois)
+        num_rois = len(rois) # assume N?
         num_channels = x[0].shape[1]
-        output_size = self.output_size[0]
+        output_size = self.output_size[0] # output_size:(7,7)
 
         dtype, device = x[0].dtype, x[0].device
         result = torch.zeros(
-            (num_rois, num_channels, output_size, output_size),
+            (num_rois, num_channels, output_size, output_size), # [N,C,7,7]
             dtype=dtype,
             device=device,
         )

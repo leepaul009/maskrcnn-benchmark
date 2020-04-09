@@ -89,6 +89,7 @@ def make_batch_data_sampler(
     if aspect_grouping:
         if not isinstance(aspect_grouping, (list, tuple)):
             aspect_grouping = [aspect_grouping]
+            
         aspect_ratios = _compute_aspect_ratios(dataset)
         group_ids = _quantize(aspect_ratios, aspect_grouping)
         batch_sampler = samplers.GroupedBatchSampler(
@@ -108,14 +109,14 @@ def make_batch_data_sampler(
 def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0, is_for_period=False):
     num_gpus = get_world_size()
     if is_train:
-        images_per_batch = cfg.SOLVER.IMS_PER_BATCH
+        images_per_batch = cfg.SOLVER.IMS_PER_BATCH # ex.16
         assert (
             images_per_batch % num_gpus == 0
         ), "SOLVER.IMS_PER_BATCH ({}) must be divisible by the number of GPUs ({}) used.".format(
             images_per_batch, num_gpus)
         images_per_gpu = images_per_batch // num_gpus
         shuffle = True
-        num_iters = cfg.SOLVER.MAX_ITER
+        num_iters = cfg.SOLVER.MAX_ITER # ex.40000
     else:
         images_per_batch = cfg.TEST.IMS_PER_BATCH
         assert (
@@ -159,6 +160,7 @@ def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0, is_
         # save category_id to label name mapping
         save_labels(datasets, cfg.OUTPUT_DIR)
 
+    # each data_loader => one dataset
     data_loaders = []
     for dataset in datasets:
         sampler = make_data_sampler(dataset, shuffle, is_distributed)
@@ -166,8 +168,9 @@ def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0, is_
             dataset, sampler, aspect_grouping, images_per_gpu, num_iters, start_iter
         )
         collator = BBoxAugCollator() if not is_train and cfg.TEST.BBOX_AUG.ENABLED else \
-            BatchCollator(cfg.DATALOADER.SIZE_DIVISIBILITY)
-        num_workers = cfg.DATALOADER.NUM_WORKERS
+            BatchCollator(cfg.DATALOADER.SIZE_DIVISIBILITY) # ex.0/32
+        num_workers = cfg.DATALOADER.NUM_WORKERS # ex.4
+
         data_loader = torch.utils.data.DataLoader(
             dataset,
             num_workers=num_workers,

@@ -106,7 +106,7 @@ def cat_boxlist(bboxes):
     single BoxList
 
     Arguments:
-        bboxes (list[BoxList])
+        bboxes (list[BoxList]), (assume listSize=5)
     """
     assert isinstance(bboxes, (list, tuple))
     assert all(isinstance(bbox, BoxList) for bbox in bboxes)

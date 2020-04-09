@@ -77,6 +77,8 @@ class BoxCoder(object):
         dw = torch.clamp(dw, max=self.bbox_xform_clip)
         dh = torch.clamp(dh, max=self.bbox_xform_clip)
 
+        # dx,dy encoded by Net is based on anc's center point, 
+        # new convert dx,dy into Feature map axis (resolution-w/h = feat-w/h * scale)
         pred_ctr_x = dx * widths[:, None] + ctr_x[:, None]
         pred_ctr_y = dy * heights[:, None] + ctr_y[:, None]
         pred_w = torch.exp(dw) * widths[:, None]

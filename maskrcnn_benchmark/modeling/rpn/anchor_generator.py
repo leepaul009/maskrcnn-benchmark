@@ -39,9 +39,9 @@ class AnchorGenerator(nn.Module):
 
     def __init__(
         self,
-        sizes=(128, 256, 512),
-        aspect_ratios=(0.5, 1.0, 2.0),
-        anchor_strides=(8, 16, 32),
+        sizes=(128, 256, 512),          # ex. (32, 64, 128, 256, 512)
+        aspect_ratios=(0.5, 1.0, 2.0),  # ex. (0.5, 1.0, 2.0)
+        anchor_strides=(8, 16, 32),     # ex. (4, 8, 16, 32, 64)
         straddle_thresh=0,
     ):
         super(AnchorGenerator, self).__init__()
@@ -55,6 +55,7 @@ class AnchorGenerator(nn.Module):
             if len(anchor_strides) != len(sizes):
                 raise RuntimeError("FPN should have #anchor_strides == #sizes")
 
+            # list(np.array) ex. 5x[3 4]
             cell_anchors = [
                 generate_anchors(
                     anchor_stride,
@@ -63,6 +64,7 @@ class AnchorGenerator(nn.Module):
                 ).float()
                 for anchor_stride, size in zip(anchor_strides, sizes)
             ]
+
         self.strides = anchor_strides
         self.cell_anchors = BufferList(cell_anchors)
         self.straddle_thresh = straddle_thresh
@@ -70,13 +72,18 @@ class AnchorGenerator(nn.Module):
     def num_anchors_per_location(self):
         return [len(cell_anchors) for cell_anchors in self.cell_anchors]
 
+    # grid_sizes: feat map size H, W
     def grid_anchors(self, grid_sizes):
         anchors = []
+        # strides, cell_anchors have same length to grid_sizes, 
+        # which is the number of feature level.
         for size, stride, base_anchors in zip(
             grid_sizes, self.strides, self.cell_anchors
         ):
             grid_height, grid_width = size
             device = base_anchors.device
+            
+            # get offset for each pixel of feature map
             shifts_x = torch.arange(
                 0, grid_width * stride, step=stride, dtype=torch.float32, device=device
             )
@@ -88,11 +95,12 @@ class AnchorGenerator(nn.Module):
             shift_y = shift_y.reshape(-1)
             shifts = torch.stack((shift_x, shift_y, shift_x, shift_y), dim=1)
 
+            # get actual position with offset and relative position
             anchors.append(
                 (shifts.view(-1, 1, 4) + base_anchors.view(1, -1, 4)).reshape(-1, 4)
             )
 
-        return anchors
+        return anchors # List[ 5 x Tensor[3HW, 4] ]
 
     def add_visibility_to(self, boxlist):
         image_width, image_height = boxlist.size
@@ -109,34 +117,47 @@ class AnchorGenerator(nn.Module):
             inds_inside = torch.ones(anchors.shape[0], dtype=torch.bool, device=device)
         boxlist.add_field("visibility", inds_inside)
 
+    # for each of 5 pyramid layers (4x ResNet + 1x MaxPool)
     def forward(self, image_list, feature_maps):
+        # Each tensor in the list feature_maps correspond to different feature levels
         grid_sizes = [feature_map.shape[-2:] for feature_map in feature_maps]
+        
+        # List[ 5 x Tensor[3HW, 4] ]
         anchors_over_all_feature_maps = self.grid_anchors(grid_sizes)
+        
+        # anchors (num_img, num_anchor_box, ...)
         anchors = []
         for i, (image_height, image_width) in enumerate(image_list.image_sizes):
             anchors_in_image = []
+
+            # each correspond to one of 5 pyramid anchors
             for anchors_per_feature_map in anchors_over_all_feature_maps:
+                # anchors_per_feature_map Tensor[3xHxW,4]
                 boxlist = BoxList(
                     anchors_per_feature_map, (image_width, image_height), mode="xyxy"
                 )
                 self.add_visibility_to(boxlist)
                 anchors_in_image.append(boxlist)
+
             anchors.append(anchors_in_image)
-        return anchors
+        return anchors # [ num_imgs, 5, boxlist{3HW anchors ...} ]
 
-
+"""
+anchor_stride
+"""
 def make_anchor_generator(config):
-    anchor_sizes = config.MODEL.RPN.ANCHOR_SIZES
-    aspect_ratios = config.MODEL.RPN.ASPECT_RATIOS
-    anchor_stride = config.MODEL.RPN.ANCHOR_STRIDE
-    straddle_thresh = config.MODEL.RPN.STRADDLE_THRESH
+    anchor_sizes = config.MODEL.RPN.ANCHOR_SIZES   # ex. (32, 64, 128, 256, 512)
+    aspect_ratios = config.MODEL.RPN.ASPECT_RATIOS # ex. (0.5, 1.0, 2.0)
+    anchor_stride = config.MODEL.RPN.ANCHOR_STRIDE # ex. (4, 8, 16, 32, 64)
+    straddle_thresh = config.MODEL.RPN.STRADDLE_THRESH # ex. 0
 
-    if config.MODEL.RPN.USE_FPN:
+    if config.MODEL.RPN.USE_FPN: # .ex. True
         assert len(anchor_stride) == len(
             anchor_sizes
         ), "FPN should have len(ANCHOR_STRIDE) == len(ANCHOR_SIZES)"
     else:
         assert len(anchor_stride) == 1, "Non-FPN should have a single ANCHOR_STRIDE"
+        
     anchor_generator = AnchorGenerator(
         anchor_sizes, aspect_ratios, anchor_stride, straddle_thresh
     )
@@ -165,6 +186,7 @@ def make_anchor_generator_retinanet(config):
     )
     return anchor_generator
 
+"""
 # Copyright (c) 2017-present, Facebook, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -215,7 +237,7 @@ def make_anchor_generator_retinanet(config):
 #        [ -35.,  -79.,   52.,   96.],
 #        [ -79., -167.,   96.,  184.],
 #        [-167., -343.,  184.,  360.]])
-
+"""
 
 def generate_anchors(
     stride=16, sizes=(32, 64, 128, 256, 512), aspect_ratios=(0.5, 1, 2)
@@ -231,12 +253,14 @@ def generate_anchors(
     )
 
 
-def _generate_anchors(base_size, scales, aspect_ratios):
+def _generate_anchors(base_size, scales, aspect_ratios): # ex. scales=8
     """Generate anchor (reference) windows by enumerating aspect ratios X
     scales wrt a reference (0, 0, base_size - 1, base_size - 1) window.
     """
     anchor = np.array([1, 1, base_size, base_size], dtype=np.float) - 1
     anchors = _ratio_enum(anchor, aspect_ratios)
+    
+    # 3x [1 4] =stack=> [3 4]
     anchors = np.vstack(
         [_scale_enum(anchors[i, :], scales) for i in range(anchors.shape[0])]
     )

@@ -89,38 +89,38 @@ class ResNet(nn.Module):
         # Translate string names to implementations
         stem_module = _STEM_MODULES[cfg.MODEL.RESNETS.STEM_FUNC]
         stage_specs = _STAGE_SPECS[cfg.MODEL.BACKBONE.CONV_BODY]
-        transformation_module = _TRANSFORMATION_MODULES[cfg.MODEL.RESNETS.TRANS_FUNC]
+        transformation_module = _TRANSFORMATION_MODULES[cfg.MODEL.RESNETS.TRANS_FUNC] # ex. BottleneckWithFixedBatchNorm
 
         # Construct the stem module
         self.stem = stem_module(cfg)
 
         # Constuct the specified ResNet stages
-        num_groups = cfg.MODEL.RESNETS.NUM_GROUPS
-        width_per_group = cfg.MODEL.RESNETS.WIDTH_PER_GROUP
-        in_channels = cfg.MODEL.RESNETS.STEM_OUT_CHANNELS
-        stage2_bottleneck_channels = num_groups * width_per_group
-        stage2_out_channels = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS
+        num_groups = cfg.MODEL.RESNETS.NUM_GROUPS # ex.1
+        width_per_group = cfg.MODEL.RESNETS.WIDTH_PER_GROUP # ex. 64
+        in_channels = cfg.MODEL.RESNETS.STEM_OUT_CHANNELS # ex. 64
+        stage2_bottleneck_channels = num_groups * width_per_group # ex. 64
+        stage2_out_channels = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS # ex. 256
         self.stages = []
         self.return_features = {}
         for stage_spec in stage_specs:
             name = "layer" + str(stage_spec.index)
-            stage2_relative_factor = 2 ** (stage_spec.index - 1)
-            bottleneck_channels = stage2_bottleneck_channels * stage2_relative_factor
-            out_channels = stage2_out_channels * stage2_relative_factor
+            stage2_relative_factor = 2 ** (stage_spec.index - 1) # ex. 1,2,4,8
+            bottleneck_channels = stage2_bottleneck_channels * stage2_relative_factor # ex. 64, 128, 256, 512
+            out_channels = stage2_out_channels * stage2_relative_factor # ex. 256, 512, 1024, 2048
             stage_with_dcn = cfg.MODEL.RESNETS.STAGE_WITH_DCN[stage_spec.index -1]
             module = _make_stage(
                 transformation_module,
                 in_channels,
                 bottleneck_channels,
                 out_channels,
-                stage_spec.block_count,
+                stage_spec.block_count, # ex. 3, 4, 6, 3
                 num_groups,
                 cfg.MODEL.RESNETS.STRIDE_IN_1X1,
                 first_stride=int(stage_spec.index > 1) + 1,
                 dcn_config={
-                    "stage_with_dcn": stage_with_dcn,
-                    "with_modulated_dcn": cfg.MODEL.RESNETS.WITH_MODULATED_DCN,
-                    "deformable_groups": cfg.MODEL.RESNETS.DEFORMABLE_GROUPS,
+                    "stage_with_dcn": stage_with_dcn, # ex. (False, False, False, False)
+                    "with_modulated_dcn": cfg.MODEL.RESNETS.WITH_MODULATED_DCN, # ex. False
+                    "deformable_groups": cfg.MODEL.RESNETS.DEFORMABLE_GROUPS, # ex. 1
                 }
             )
             in_channels = out_channels
@@ -142,11 +142,12 @@ class ResNet(nn.Module):
             for p in m.parameters():
                 p.requires_grad = False
 
+    # in case of ResNet-50-FPN, return 4 output in outputs
     def forward(self, x):
         outputs = []
         x = self.stem(x)
         for stage_name in self.stages:
-            x = getattr(self, stage_name)(x)
+            x = getattr(self, stage_name)(x) # suppose that getattr will run added module 
             if self.return_features[stage_name]:
                 outputs.append(x)
         return outputs
@@ -220,7 +221,7 @@ def _make_stage(
     stride = first_stride
     for _ in range(block_count):
         blocks.append(
-            transformation_module(
+            transformation_module( # ex. BottleneckWithFixedBatchNorm
                 in_channels,
                 bottleneck_channels,
                 out_channels,
@@ -283,10 +284,10 @@ class Bottleneck(nn.Module):
         )
         self.bn1 = norm_func(bottleneck_channels)
         # TODO: specify init for the above
-        with_dcn = dcn_config.get("stage_with_dcn", False)
+        with_dcn = dcn_config.get("stage_with_dcn", False) # ex ResNet50+FPN, all False
         if with_dcn:
-            deformable_groups = dcn_config.get("deformable_groups", 1)
-            with_modulated_dcn = dcn_config.get("with_modulated_dcn", False)
+            deformable_groups = dcn_config.get("deformable_groups", 1) # ex ResNet50+FPN, 1
+            with_modulated_dcn = dcn_config.get("with_modulated_dcn", False) # ex ResNet50+FPN, False
             self.conv2 = DFConv2d(
                 bottleneck_channels,
                 bottleneck_channels,

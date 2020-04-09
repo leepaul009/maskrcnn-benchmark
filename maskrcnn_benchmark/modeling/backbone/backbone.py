@@ -25,8 +25,9 @@ def build_resnet_backbone(cfg):
 @registry.BACKBONES.register("R-152-FPN")
 def build_resnet_fpn_backbone(cfg):
     body = resnet.ResNet(cfg)
-    in_channels_stage2 = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS
-    out_channels = cfg.MODEL.RESNETS.BACKBONE_OUT_CHANNELS
+    in_channels_stage2 = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS # ex.256
+    out_channels = cfg.MODEL.RESNETS.BACKBONE_OUT_CHANNELS # ex.256
+
     fpn = fpn_module.FPN(
         in_channels_list=[
             in_channels_stage2,
@@ -40,6 +41,7 @@ def build_resnet_fpn_backbone(cfg):
         ),
         top_blocks=fpn_module.LastLevelMaxPool(),
     )
+
     model = nn.Sequential(OrderedDict([("body", body), ("fpn", fpn)]))
     model.out_channels = out_channels
     return model

@@ -53,7 +53,7 @@ class RPNPostProcessor(torch.nn.Module):
     def add_gt_proposals(self, proposals, targets):
         """
         Arguments:
-            proposals: list[BoxList]
+            proposals: list[BoxList] (assume listSize=N)
             targets: list[BoxList]
         """
         # Get the device we're operating on
@@ -76,18 +76,18 @@ class RPNPostProcessor(torch.nn.Module):
     def forward_for_single_feature_map(self, anchors, objectness, box_regression):
         """
         Arguments:
-            anchors: list[BoxList]
+            anchors: list[BoxList], (assume list number = batchSize N)
             objectness: tensor of size N, A, H, W
             box_regression: tensor of size N, A * 4, H, W
         """
         device = objectness.device
         N, A, H, W = objectness.shape
 
-        # put in the same format as anchors
+        # put in the same format as anchors # (N, AHW, C) => (N, AHW)
         objectness = permute_and_flatten(objectness, N, A, 1, H, W).view(N, -1)
         objectness = objectness.sigmoid()
 
-        box_regression = permute_and_flatten(box_regression, N, A, 4, H, W)
+        box_regression = permute_and_flatten(box_regression, N, A, 4, H, W) # (N, AHW, 4)
 
         num_anchors = A * H * W
 
@@ -97,20 +97,23 @@ class RPNPostProcessor(torch.nn.Module):
         batch_idx = torch.arange(N, device=device)[:, None]
         box_regression = box_regression[batch_idx, topk_idx]
 
-        image_shapes = [box.size for box in anchors]
-        concat_anchors = torch.cat([a.bbox for a in anchors], dim=0)
+        image_shapes = [box.size for box in anchors] # list(tuple)
+        concat_anchors = torch.cat([a.bbox for a in anchors], dim=0) # list(3HW,4),list size=N => (N*3HW,4)
         concat_anchors = concat_anchors.reshape(N, -1, 4)[batch_idx, topk_idx]
 
+        # box offsets + orig boxes => proposals(N*3HW, 4)
         proposals = self.box_coder.decode(
             box_regression.view(-1, 4), concat_anchors.view(-1, 4)
         )
 
-        proposals = proposals.view(N, -1, 4)
+        proposals = proposals.view(N, -1, 4) # => (N,3HW,4)
 
         result = []
+        # for each img if a batch(N), image_shapes => input image size
         for proposal, score, im_shape in zip(proposals, objectness, image_shapes):
             boxlist = BoxList(proposal, im_shape, mode="xyxy")
             boxlist.add_field("objectness", score)
+            # clip proposals to image_shapes
             boxlist = boxlist.clip_to_image(remove_empty=False)
             boxlist = remove_small_boxes(boxlist, self.min_size)
             boxlist = boxlist_nms(
@@ -125,22 +128,24 @@ class RPNPostProcessor(torch.nn.Module):
     def forward(self, anchors, objectness, box_regression, targets=None):
         """
         Arguments:
-            anchors: list[list[BoxList]]
-            objectness: list[tensor]
-            box_regression: list[tensor]
-
+            anchors: list[list[BoxList]], (assume listSize=[N, 5])
+            objectness: list[tensor], (assume listSize=[5])
+            box_regression: list[tensor], (assume listSize=[5])
+            targets (list[BoxList): ground-truth boxes present in the image (optional)
         Returns:
             boxlists (list[BoxList]): the post-processed anchors, after
                 applying box decoding and NMS
         """
         sampled_boxes = []
         num_levels = len(objectness)
-        anchors = list(zip(*anchors))
-        for a, o, b in zip(anchors, objectness, box_regression):
+        anchors = list(zip(*anchors)) # split anchors into list with size=5
+        
+        # for each pyramid layer, output:list[list[tensor]], listSize=5xNxBoxList
+        for a, o, b in zip(anchors, objectness, box_regression): 
             sampled_boxes.append(self.forward_for_single_feature_map(a, o, b))
 
-        boxlists = list(zip(*sampled_boxes))
-        boxlists = [cat_boxlist(boxlist) for boxlist in boxlists]
+        boxlists = list(zip(*sampled_boxes)) # convert to Nx5xBoxList
+        boxlists = [cat_boxlist(boxlist) for boxlist in boxlists] # convert to NxBoxList
 
         if num_levels > 1:
             boxlists = self.select_over_all_levels(boxlists)
@@ -149,6 +154,7 @@ class RPNPostProcessor(torch.nn.Module):
         if self.training and targets is not None:
             boxlists = self.add_gt_proposals(boxlists, targets)
 
+        # list[BoxList], listSize=N, BoxList contains bbox which is Tensor[2*5*A*H*W, 4]
         return boxlists
 
     def select_over_all_levels(self, boxlists):
@@ -182,25 +188,34 @@ class RPNPostProcessor(torch.nn.Module):
 
 
 def make_rpn_postprocessor(config, rpn_box_coder, is_train):
-    fpn_post_nms_top_n = config.MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN
+    # 2000, Number of top scoring RPN proposals to keep after combining proposals from all FPN levels
+    fpn_post_nms_top_n = config.MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN 
+    
     if not is_train:
         fpn_post_nms_top_n = config.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST
 
+    # 12000, When FPN is used, this is *per FPN level* (not total)
     pre_nms_top_n = config.MODEL.RPN.PRE_NMS_TOP_N_TRAIN
+    # 2000, Number of top scoring RPN proposals to keep after applying NMS
     post_nms_top_n = config.MODEL.RPN.POST_NMS_TOP_N_TRAIN
+    
     if not is_train:
         pre_nms_top_n = config.MODEL.RPN.PRE_NMS_TOP_N_TEST
         post_nms_top_n = config.MODEL.RPN.POST_NMS_TOP_N_TEST
+    
+    # Apply the post NMS per batch (default) or per image during training
+    # (default is True to be consistent with Detectron, see Issue #672)
     fpn_post_nms_per_batch = config.MODEL.RPN.FPN_POST_NMS_PER_BATCH
     nms_thresh = config.MODEL.RPN.NMS_THRESH
     min_size = config.MODEL.RPN.MIN_SIZE
+    
     box_selector = RPNPostProcessor(
         pre_nms_top_n=pre_nms_top_n,
         post_nms_top_n=post_nms_top_n,
         nms_thresh=nms_thresh,
         min_size=min_size,
         box_coder=rpn_box_coder,
-        fpn_post_nms_top_n=fpn_post_nms_top_n,
-        fpn_post_nms_per_batch=fpn_post_nms_per_batch,
+        fpn_post_nms_top_n=fpn_post_nms_top_n, # ex. 2000
+        fpn_post_nms_per_batch=fpn_post_nms_per_batch, # ex. True
     )
     return box_selector

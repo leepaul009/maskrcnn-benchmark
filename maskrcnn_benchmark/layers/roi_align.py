@@ -10,13 +10,15 @@ from maskrcnn_benchmark import _C
 from apex import amp
 
 class _ROIAlign(Function):
+    # input: feat map each level, roi:boxes
     @staticmethod
     def forward(ctx, input, roi, output_size, spatial_scale, sampling_ratio):
         ctx.save_for_backward(roi)
         ctx.output_size = _pair(output_size)
         ctx.spatial_scale = spatial_scale
         ctx.sampling_ratio = sampling_ratio
-        ctx.input_shape = input.size()
+        ctx.input_shape = input.size() # assume [NCHW]
+        # _C.roi_align_forward implemented by C++
         output = _C.roi_align_forward(
             input, roi, spatial_scale, output_size[0], output_size[1], sampling_ratio
         )
@@ -54,6 +56,8 @@ class ROIAlign(nn.Module):
         self.spatial_scale = spatial_scale
         self.sampling_ratio = sampling_ratio
 
+    # input: per_level_feature
+    # rois: rois_per_level
     @amp.float_function
     def forward(self, input, rois):
         return roi_align(

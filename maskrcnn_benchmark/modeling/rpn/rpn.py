@@ -87,10 +87,11 @@ class RPNHead(nn.Module):
         self.conv = nn.Conv2d(
             in_channels, in_channels, kernel_size=3, stride=1, padding=1
         )
+        # num_anchors = number of ratios ex. 3
+        # c-net: ic=256 oc=3 feasible?
+        # b-net: ic=256 oc=3*4 feasible?
         self.cls_logits = nn.Conv2d(in_channels, num_anchors, kernel_size=1, stride=1)
-        self.bbox_pred = nn.Conv2d(
-            in_channels, num_anchors * 4, kernel_size=1, stride=1
-        )
+        self.bbox_pred  = nn.Conv2d(in_channels, num_anchors*4, kernel_size=1, stride=1)
 
         for l in [self.conv, self.cls_logits, self.bbox_pred]:
             torch.nn.init.normal_(l.weight, std=0.01)
@@ -99,13 +100,14 @@ class RPNHead(nn.Module):
     def forward(self, x):
         logits = []
         bbox_reg = []
-        for feature in x:
+        # from high abstract level to low
+        for feature in x: 
             t = F.relu(self.conv(feature))
             logits.append(self.cls_logits(t))
             bbox_reg.append(self.bbox_pred(t))
         return logits, bbox_reg
 
-
+# main implementation
 class RPNModule(torch.nn.Module):
     """
     Module for RPN computation. Takes feature maps from the backbone and outputs 
@@ -121,7 +123,7 @@ class RPNModule(torch.nn.Module):
 
         rpn_head = registry.RPN_HEADS[cfg.MODEL.RPN.RPN_HEAD]
         head = rpn_head(
-            cfg, in_channels, anchor_generator.num_anchors_per_location()[0]
+            cfg, in_channels, anchor_generator.num_anchors_per_location()[0] # ex. 3
         )
 
         rpn_box_coder = BoxCoder(weights=(1.0, 1.0, 1.0, 1.0))
@@ -137,6 +139,7 @@ class RPNModule(torch.nn.Module):
         self.box_selector_test = box_selector_test
         self.loss_evaluator = loss_evaluator
 
+    # RPN forward
     def forward(self, images, features, targets=None):
         """
         Arguments:
@@ -152,11 +155,12 @@ class RPNModule(torch.nn.Module):
             losses (dict[Tensor]): the losses for the model during training. During
                 testing, it is an empty dict.
         """
-        objectness, rpn_box_regression = self.head(features)
-        anchors = self.anchor_generator(images, features)
+        # output: list[N3HW], list[N12HW], list size=5
+        objectness, rpn_box_regression = self.head(features) # features: 5xTensor
+        anchors = self.anchor_generator(images, features) # anchors [num_imgs, 5, {3HW anchors ...}]
 
         if self.training:
-            return self._forward_train(anchors, objectness, rpn_box_regression, targets)
+            return self._forward_train(anchors, objectness, rpn_box_regression, targets) 
         else:
             return self._forward_test(anchors, objectness, rpn_box_regression)
 
@@ -171,9 +175,11 @@ class RPNModule(torch.nn.Module):
             # For end-to-end models, anchors must be transformed into boxes and
             # sampled into a training batch.
             with torch.no_grad():
+                # self.box_selector_train is a RPNPostProcessor Obj
                 boxes = self.box_selector_train(
                     anchors, objectness, rpn_box_regression, targets
-                )
+                ) 
+                
         loss_objectness, loss_rpn_box_reg = self.loss_evaluator(
             anchors, objectness, rpn_box_regression, targets
         )

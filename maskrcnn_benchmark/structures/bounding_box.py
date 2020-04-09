@@ -74,6 +74,7 @@ class BoxList(object):
 
     def _split_into_xyxy(self):
         if self.mode == "xyxy":
+            # convert Tensor[:,:,4] to 4x tuple of Tensor[:,:,1]
             xmin, ymin, xmax, ymax = self.bbox.split(1, dim=-1)
             return xmin, ymin, xmax, ymax
         elif self.mode == "xywh":
@@ -213,7 +214,7 @@ class BoxList(object):
 
     def clip_to_image(self, remove_empty=True):
         TO_REMOVE = 1
-        self.bbox[:, 0].clamp_(min=0, max=self.size[0] - TO_REMOVE)
+        self.bbox[:, 0].clamp_(min=0, max=self.size[0] - TO_REMOVE) # in-place version of torch.clamp()
         self.bbox[:, 1].clamp_(min=0, max=self.size[1] - TO_REMOVE)
         self.bbox[:, 2].clamp_(min=0, max=self.size[0] - TO_REMOVE)
         self.bbox[:, 3].clamp_(min=0, max=self.size[1] - TO_REMOVE)
