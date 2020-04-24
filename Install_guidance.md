@@ -10,9 +10,21 @@
 - OpenCV
 - CUDA >= 9.0
 
+### Env: Ubuntu16.04
 
-### Option 1: Step-by-step installation
+### step 1: CUDA and Dataset
+```
+# install Nvidia driver, version 384.130
+# install CUDA >=9.0
 
+# check if CUDA or cudnn installed
+sudo apt list --installed | grep -E 'cuda|cudnn'
+
+# Download coco dataset
+
+```
+
+### step 2: Python env
 ```bash
 # first, make sure that your conda is setup properly with the right environment
 # for that, check that `which conda`, `which pip` and `which python` points to the
@@ -22,13 +34,21 @@ conda create --name maskrcnn_benchmark -y
 conda activate maskrcnn_benchmark
 
 # this installs the right pip and dependencies for the fresh python
+# this might install python3.8 that seems incompitable to version of PyTorch that we want to install
 conda install ipython pip
+
+# thus we need to revert python to 3.7
+conda install python=3.7 anaconda=custom
 
 # maskrcnn_benchmark and coco api dependencies
 pip install ninja yacs cython matplotlib tqdm opencv-python
+# some dependencies might have a wrong version
+pip install torchvision==0.2.2
+pip install pillow==6.2.1
 
 # follow PyTorch installation in https://pytorch.org/get-started/locally/
 # we give the instructions for CUDA 9.0
+# this will install nightly version of 1.0.0xxx of pytorch
 conda install -c pytorch pytorch-nightly torchvision cudatoolkit=9.0
 
 export INSTALL_DIR=$PWD
@@ -49,9 +69,12 @@ python setup.py build_ext install
 cd $INSTALL_DIR
 git clone https://github.com/NVIDIA/apex.git
 cd apex
+# this apex might be too new for us, we neet to checkout an older version and makesure building successful
+git checkout f3a960f80244cf9e80558ab30f7f7e8cbf03c0a0
 python setup.py install --cuda_ext --cpp_ext
 
 # install PyTorch Detection
+# when dependencies change, we might need to delete build dir
 cd $INSTALL_DIR
 git clone https://github.com/facebookresearch/maskrcnn-benchmark.git
 cd maskrcnn-benchmark
@@ -68,73 +91,3 @@ unset INSTALL_DIR
 # or if you are on macOS
 # MACOSX_DEPLOYMENT_TARGET=10.9 CC=clang CXX=clang++ python setup.py build develop
 ```
-#### Windows 10
-```bash
-open a cmd and change to desired installation directory
-from now on will be refered as INSTALL_DIR
-conda create --name maskrcnn_benchmark
-conda activate maskrcnn_benchmark
-
-# this installs the right pip and dependencies for the fresh python
-conda install ipython
-
-# maskrcnn_benchmark and coco api dependencies
-pip install ninja yacs cython matplotlib tqdm opencv-python
-
-# follow PyTorch installation in https://pytorch.org/get-started/locally/
-# we give the instructions for CUDA 9.0
-## Important : check the cuda version installed on your computer by running the command in the cmd :
-nvcc -- version
-conda install -c pytorch pytorch-nightly torchvision cudatoolkit=9.0
-
-git clone https://github.com/cocodataset/cocoapi.git
-
-    #To prevent installation error do the following after commiting cocooapi :
-    #using file explorer  naviagate to cocoapi\PythonAPI\setup.py and change line 14 from:
-    #extra_compile_args=['-Wno-cpp', '-Wno-unused-function', '-std=c99'],
-    #to
-    #extra_compile_args={'gcc': ['/Qstd=c99']},
-    #Based on  https://github.com/cocodataset/cocoapi/issues/51
-
-cd cocoapi/PythonAPI
-python setup.py build_ext install
-
-# navigate back to INSTALL_DIR
-cd ..
-cd ..
-# install apex
-
-git clone https://github.com/NVIDIA/apex.git
-cd apex
-python setup.py install --cuda_ext --cpp_ext
-# navigate back to INSTALL_DIR
-cd ..
-# install PyTorch Detection
-
-git clone https://github.com/Idolized22/maskrcnn-benchmark.git
-cd maskrcnn-benchmark
-
-# the following will install the lib with
-# symbolic links, so that you can modify
-# the files if you want and won't need to
-# re-build it
-python setup.py build develop
-```
-### Option 2: Docker Image (Requires CUDA, Linux only)
-
-Build image with defaults (`CUDA=9.0`, `CUDNN=7`, `FORCE_CUDA=1`):
-
-    nvidia-docker build -t maskrcnn-benchmark docker/
-
-Build image with other CUDA and CUDNN versions:
-
-    nvidia-docker build -t maskrcnn-benchmark --build-arg CUDA=9.2 --build-arg CUDNN=7 docker/
-
-Build image with FORCE_CUDA disabled:
-
-    nvidia-docker build -t maskrcnn-benchmark --build-arg FORCE_CUDA=0 docker/
-
-Build and run image with built-in jupyter notebook(note that the password is used to log in jupyter notebook):
-
-    nvidia-docker build -t maskrcnn-benchmark-jupyter docker/docker-jupyter/
-    nvidia-docker run -td -p 8888:8888 -e PASSWORD=<password> -v <host-dir>:<container-dir> maskrcnn-benchmark-jupyter
