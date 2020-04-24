@@ -16,6 +16,7 @@
 ```
 # install Nvidia driver, version 384.130
 # install CUDA >=9.0
+# refer to https://medium.com/repro-repo/install-cuda-and-cudnn-for-tensorflow-gpu-on-ubuntu-79306e4ac04e
 
 # check if CUDA or cudnn installed
 sudo apt list --installed | grep -E 'cuda|cudnn'
