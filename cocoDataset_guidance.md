@@ -55,3 +55,11 @@ class CocoDetection(data.Dataset):
 
     ...
 ```
+
+CocoDetection init a pycocotools.coo instance inside.
+```
+from pycocotools.coco import COCO
+self.coco = COCO(annFile)
+```
+maskrcnn's COCODataset will call self.coco to get some variable about coco dataset.
+pycocotools.coco is shown in: https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocotools/coco.py
