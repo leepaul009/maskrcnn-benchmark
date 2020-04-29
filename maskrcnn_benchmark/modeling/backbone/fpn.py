@@ -34,7 +34,7 @@ class FPN(nn.Module):
             if in_channels == 0:
                 continue
             inner_block_module = conv_block(in_channels, out_channels, 1)
-            layer_block_module = conv_block(out_channels, out_channels, 3, 1)
+            layer_block_module = conv_block(out_channels, out_channels, 3, 1) # conv2d, k=3
             self.add_module(inner_block, inner_block_module)
             self.add_module(layer_block, layer_block_module)
             self.inner_blocks.append(inner_block)
@@ -55,7 +55,8 @@ class FPN(nn.Module):
         results = []
         results.append(getattr(self, self.layer_blocks[-1])(last_inner))
 
-        # x[:-1][::-1] indicates reverse order + from second last one
+        # [:-1]  indicates "to second last" or "ignore last"
+        # [::-1] indicates reverse order
         # go throng pyramid layer top-down
         for feature, inner_block, layer_block in zip(
             x[:-1][::-1], self.inner_blocks[:-1][::-1], self.layer_blocks[:-1][::-1]

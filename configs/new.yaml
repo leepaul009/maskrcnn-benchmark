@@ -1,6 +1,5 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
-  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
   BACKBONE:
     CONV_BODY: "R-50-FPN"
   RESNETS:
@@ -30,10 +29,9 @@ MODEL:
     SHARE_BOX_FEATURE_EXTRACTOR: False
   MASK_ON: True
 DATASETS:
-  TRAIN: ("coco_2017_train",)
-  TEST: ("coco_2017_train",)
+  TRAIN: ("coco_2014_train",)
 DATALOADER:
-  SIZE_DIVISIBILITY: 32
+  SIZE_DIVISIBILITY: 0
 SOLVER:
   BASE_LR: 0.02
   WEIGHT_DECAY: 0.0001

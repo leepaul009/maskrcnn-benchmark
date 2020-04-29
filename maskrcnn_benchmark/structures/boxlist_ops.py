@@ -106,13 +106,13 @@ def cat_boxlist(bboxes):
     single BoxList
 
     Arguments:
-        bboxes (list[BoxList]), (assume listSize=5)
+        bboxes (list[BoxList])
     """
     assert isinstance(bboxes, (list, tuple))
     assert all(isinstance(bbox, BoxList) for bbox in bboxes)
 
     size = bboxes[0].size
-    assert all(bbox.size == size for bbox in bboxes)
+    assert all(bbox.size == size for bbox in bboxes) # compare img size
 
     mode = bboxes[0].mode
     assert all(bbox.mode == mode for bbox in bboxes)

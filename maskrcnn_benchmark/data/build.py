@@ -61,6 +61,7 @@ def make_data_sampler(dataset, shuffle, distributed):
     if distributed:
         return samplers.DistributedSampler(dataset, shuffle=shuffle)
     if shuffle:
+        # dataset is an instance of class COCODataset
         sampler = torch.utils.data.sampler.RandomSampler(dataset)
     else:
         sampler = torch.utils.data.sampler.SequentialSampler(dataset)
@@ -73,9 +74,10 @@ def _quantize(x, bins):
     quantized = list(map(lambda y: bisect.bisect_right(bins, y), x))
     return quantized
 
-
+# return list of ratio(img_h/img_w) for all imgs
 def _compute_aspect_ratios(dataset):
     aspect_ratios = []
+    # for each img in dataset
     for i in range(len(dataset)):
         img_info = dataset.get_img_info(i)
         aspect_ratio = float(img_info["height"]) / float(img_info["width"])
@@ -163,7 +165,9 @@ def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0, is_
     # each data_loader => one dataset
     data_loaders = []
     for dataset in datasets:
+        # 
         sampler = make_data_sampler(dataset, shuffle, is_distributed)
+        #
         batch_sampler = make_batch_data_sampler(
             dataset, sampler, aspect_grouping, images_per_gpu, num_iters, start_iter
         )
@@ -178,8 +182,10 @@ def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0, is_
             collate_fn=collator,
         )
         data_loaders.append(data_loader)
+
     if is_train or is_for_period:
         # during training, a single (possibly concatenated) data_loader is returned
         assert len(data_loaders) == 1
         return data_loaders[0]
+
     return data_loaders

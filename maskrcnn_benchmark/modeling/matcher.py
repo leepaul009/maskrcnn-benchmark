@@ -72,8 +72,8 @@ class Matcher(object):
         between_thresholds = (matched_vals >= self.low_threshold) & (
             matched_vals < self.high_threshold
         )
-        matches[below_low_threshold] = Matcher.BELOW_LOW_THRESHOLD
-        matches[between_thresholds] = Matcher.BETWEEN_THRESHOLDS
+        matches[below_low_threshold] = Matcher.BELOW_LOW_THRESHOLD # -1
+        matches[between_thresholds] = Matcher.BETWEEN_THRESHOLDS   # -2
 
         if self.allow_low_quality_matches:
             self.set_low_quality_matches_(matches, all_matches, match_quality_matrix)

@@ -16,31 +16,33 @@ struct PreCalc {
 
 template <typename T>
 void pre_calc_for_bilinear_interpolate(
-    const int height,
-    const int width,
+    const int height, // input h
+    const int width,  // input w
     const int pooled_height,
     const int pooled_width,
-    const int iy_upper,
-    const int ix_upper,
+    const int iy_upper, // number of sampled points in y axis of bin
+    const int ix_upper, // number of sampled points in x axis of bin
     T roi_start_h,
     T roi_start_w,
-    T bin_size_h,
-    T bin_size_w,
-    int roi_bin_grid_h,
-    int roi_bin_grid_w,
+    T bin_size_h, // bin height, (Pool_7x7) => (7x7 Bins)
+    T bin_size_w, // bin width
+    int roi_bin_grid_h, // number of sampled points in y axis of bin
+    int roi_bin_grid_w, // number of sampled points in x axis of bin
     std::vector<PreCalc<T>>& pre_calc) {
   int pre_calc_index = 0;
-  for (int ph = 0; ph < pooled_height; ph++) {
-    for (int pw = 0; pw < pooled_width; pw++) {
-      for (int iy = 0; iy < iy_upper; iy++) {
-        const T yy = roi_start_h + ph * bin_size_h +
-            static_cast<T>(iy + .5f) * bin_size_h /
-                static_cast<T>(roi_bin_grid_h); // e.g., 0.5, 1.5
-        for (int ix = 0; ix < ix_upper; ix++) {
-          const T xx = roi_start_w + pw * bin_size_w +
-              static_cast<T>(ix + .5f) * bin_size_w /
-                  static_cast<T>(roi_bin_grid_w);
-
+  for (int ph = 0; ph < pooled_height; ph++) 
+  {
+    for (int pw = 0; pw < pooled_width; pw++) 
+    {
+      for (int iy = 0; iy < iy_upper; iy++) 
+      {
+        const T yy = roi_start_h + ph * bin_size_h 
+                     + static_cast<T>(iy + .5f) * bin_size_h / static_cast<T>(roi_bin_grid_h); // e.g., 0.5, 1.5
+        for (int ix = 0; ix < ix_upper; ix++) 
+        {
+          const T xx = roi_start_w + pw * bin_size_w 
+                       + static_cast<T>(ix + .5f) * bin_size_w / static_cast<T>(roi_bin_grid_w);
+          // get sampling point
           T x = xx;
           T y = yy;
           // deal with: inverse elements are out of feature map boundary
@@ -88,11 +90,13 @@ void pre_calc_for_bilinear_interpolate(
 
           T ly = y - y_low;
           T lx = x - x_low;
-          T hy = 1. - ly, hx = 1. - lx;
+          T hy = 1. - ly;
+          T hx = 1. - lx;
           T w1 = hy * hx, w2 = hy * lx, w3 = ly * hx, w4 = ly * lx;
 
           // save weights and indices
           PreCalc<T> pc;
+          // pos1~4: help to get feature value of 4 nearest position
           pc.pos1 = y_low * width + x_low;
           pc.pos2 = y_low * width + x_high;
           pc.pos3 = y_high * width + x_low;
@@ -113,17 +117,17 @@ void pre_calc_for_bilinear_interpolate(
 template <typename T>
 void ROIAlignForward_cpu_kernel(
     const int nthreads,
-    const T* bottom_data,
+    const T* bottom_data, // feature
     const T& spatial_scale,
-    const int channels,
-    const int height,
-    const int width,
+    const int channels, // input c
+    const int height,   // input h
+    const int width,    // input w
     const int pooled_height,
     const int pooled_width,
     const int sampling_ratio,
-    const T* bottom_rois,
+    const T* bottom_rois, // rois
     //int roi_cols,
-    T* top_data) {
+    T* top_data) { // output
   //AT_ASSERT(roi_cols == 4 || roi_cols == 5);
   int roi_cols = 5;
 
@@ -131,7 +135,8 @@ void ROIAlignForward_cpu_kernel(
   // (n, c, ph, pw) is an element in the pooled output
   // can be parallelized using omp
   // #pragma omp parallel for num_threads(32)
-  for (int n = 0; n < n_rois; n++) {
+  for (int n = 0; n < n_rois; n++) 
+  {
     int index_n = n * channels * pooled_width * pooled_height;
 
     // roi could have 4 or 5 columns
@@ -187,21 +192,26 @@ void ROIAlignForward_cpu_kernel(
         roi_bin_grid_w,
         pre_calc);
 
-      for (int c = 0; c < channels; c++) {
+    for (int c = 0; c < channels; c++) 
+    {
       int index_n_c = index_n + c * pooled_width * pooled_height;
-      const T* offset_bottom_data =
-          bottom_data + (roi_batch_ind * channels + c) * height * width;
+      const T* offset_bottom_data = bottom_data + (roi_batch_ind * channels + c) * height * width;
       int pre_calc_index = 0;
 
-      for (int ph = 0; ph < pooled_height; ph++) {
-        for (int pw = 0; pw < pooled_width; pw++) {
+      for (int ph = 0; ph < pooled_height; ph++)
+      {
+        for (int pw = 0; pw < pooled_width; pw++) 
+        {
           int index = index_n_c + ph * pooled_width + pw;
-
           T output_val = 0.;
-          for (int iy = 0; iy < roi_bin_grid_h; iy++) {
-            for (int ix = 0; ix < roi_bin_grid_w; ix++) {
+          
+          for (int iy = 0; iy < roi_bin_grid_h; iy++) 
+          {
+            for (int ix = 0; ix < roi_bin_grid_w; ix++) 
+            {
               PreCalc<T> pc = pre_calc[pre_calc_index];
-              output_val += pc.w1 * offset_bottom_data[pc.pos1] +
+              output_val += 
+                  pc.w1 * offset_bottom_data[pc.pos1] +
                   pc.w2 * offset_bottom_data[pc.pos2] +
                   pc.w3 * offset_bottom_data[pc.pos3] +
                   pc.w4 * offset_bottom_data[pc.pos4];
@@ -215,7 +225,8 @@ void ROIAlignForward_cpu_kernel(
         } // for pw
       } // for ph
     } // for c
-  } // for n
+
+  } // for n, n_rois
 }
 
 at::Tensor ROIAlign_forward_cpu(const at::Tensor& input,

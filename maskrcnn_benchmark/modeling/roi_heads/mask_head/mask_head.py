@@ -28,6 +28,8 @@ def keep_only_positive_boxes(boxes):
         labels = boxes_per_image.get_field("labels")
         inds_mask = labels > 0
         inds = inds_mask.nonzero().squeeze(1)
+        # after selection, boxes_per_image is also a BoxList,
+        # only the bbox inside has been reduced with index list, 'inds'
         positive_boxes.append(boxes_per_image[inds])
         positive_inds.append(inds_mask)
     return positive_boxes, positive_inds
@@ -62,13 +64,17 @@ class ROIMaskHead(torch.nn.Module):
         if self.training:
             # during training, only focus on positive boxes
             all_proposals = proposals
+            # output proposals: list[BoxList], shape[num_img, [BoxList]], bbox shape[num_proposals, 4]
+            # positive_inds:list?[num_img, num_proposals]
             proposals, positive_inds = keep_only_positive_boxes(proposals)
-        if self.training and self.cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
-            x = features
-            x = x[torch.cat(positive_inds, dim=0)]
+            
+        if self.training and self.cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR: # ex. false
+            x = features # [num_proposals, 1024]
+            x = x[torch.cat(positive_inds, dim=0)] # remove negative proposals
         else:
             x = self.feature_extractor(features, proposals)
-        mask_logits = self.predictor(x)
+
+        mask_logits = self.predictor(x) # ex. MaskRCNNC4Predictor
 
         if not self.training:
             result = self.post_processor(mask_logits, proposals)

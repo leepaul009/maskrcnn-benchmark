@@ -54,7 +54,7 @@ class MaskRCNNLossComputation(object):
 
     def match_targets_to_proposals(self, proposal, target):
         match_quality_matrix = boxlist_iou(target, proposal)
-        matched_idxs = self.proposal_matcher(match_quality_matrix)
+        matched_idxs = self.proposal_matcher(match_quality_matrix) # matched_idxs: [1,N], each is label id
         # Mask RCNN needs "labels" and "masks "fields for creating the targets
         target = target.copy_with_fields(["labels", "masks"])
         # get the targets corresponding GT for each proposal
@@ -69,11 +69,11 @@ class MaskRCNNLossComputation(object):
         labels = []
         masks = []
         for proposals_per_image, targets_per_image in zip(proposals, targets):
+            # find matched targets by matching IoU of target and proposal
             matched_targets = self.match_targets_to_proposals(
                 proposals_per_image, targets_per_image
             )
-            matched_idxs = matched_targets.get_field("matched_idxs")
-
+            matched_idxs     = matched_targets.get_field("matched_idxs")
             labels_per_image = matched_targets.get_field("labels")
             labels_per_image = labels_per_image.to(dtype=torch.int64)
 
@@ -136,7 +136,7 @@ def make_roi_mask_loss_evaluator(cfg):
     )
 
     loss_evaluator = MaskRCNNLossComputation(
-        matcher, cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
+        matcher, cfg.MODEL.ROI_MASK_HEAD.RESOLUTION # ex.28
     )
 
     return loss_evaluator

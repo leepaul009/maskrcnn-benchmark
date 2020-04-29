@@ -45,7 +45,8 @@ class BoxCoder(object):
         targets_dy = wy * (gt_ctr_y - ex_ctr_y) / ex_heights
         targets_dw = ww * torch.log(gt_widths / ex_widths)
         targets_dh = wh * torch.log(gt_heights / ex_heights)
-
+        
+        # stack in dim1, 4x[N,1] => [N,4]
         targets = torch.stack((targets_dx, targets_dy, targets_dw, targets_dh), dim=1)
         return targets
 

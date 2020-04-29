@@ -44,8 +44,10 @@ class ROIBoxHead(torch.nn.Module):
 
         # extract features that will be fed to the final classifier. The
         # feature_extractor generally corresponds to the pooler + heads
-        x = self.feature_extractor(features, proposals)
+        x = self.feature_extractor(features, proposals) # output [num_rois, 1024]
         # final classifier that converts the features into predictions
+        # final classifier use 2 FCs to output classifier Tensor[num_rois, 81]
+        # and regression Tensor[num_rois, 81*4]
         class_logits, box_regression = self.predictor(x)
 
         if not self.training:

@@ -43,7 +43,8 @@ class COCODataset(torchvision.datasets.coco.CocoDetection):
         super(COCODataset, self).__init__(root, ann_file)
         # sort indices for reproducible results
         self.ids = sorted(self.ids)
-
+        
+        # self.coco is instance of pycocotools.coco, shown in coco api
         # filter images without detection annotations
         if remove_images_without_annotations:
             ids = []
@@ -53,7 +54,9 @@ class COCODataset(torchvision.datasets.coco.CocoDetection):
                 if has_valid_annotation(anno):
                     ids.append(img_id)
             self.ids = ids
-
+        
+        # self.coco is instance defined as a class in pycocotools,
+        # it has elements: anns, imgToAnns, catToImgs, imgs, cats
         self.categories = {cat['id']: cat['name'] for cat in self.coco.cats.values()}
 
         self.json_category_id_to_contiguous_id = {

@@ -28,23 +28,24 @@ class MaskRCNNFPNFeatureExtractor(nn.Module):
         """
         super(MaskRCNNFPNFeatureExtractor, self).__init__()
 
-        resolution = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION
-        scales = cfg.MODEL.ROI_MASK_HEAD.POOLER_SCALES
-        sampling_ratio = cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO
+        resolution = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION # ex. 14
+        scales = cfg.MODEL.ROI_MASK_HEAD.POOLER_SCALES # ex. (0.25, 0.125, 0.0625, 0.03125)
+        sampling_ratio = cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO # ex. 2
         pooler = Pooler(
             output_size=(resolution, resolution),
             scales=scales,
             sampling_ratio=sampling_ratio,
         )
-        input_size = in_channels
+        input_size = in_channels # backbone input channels
         self.pooler = pooler
 
-        use_gn = cfg.MODEL.ROI_MASK_HEAD.USE_GN
-        layers = cfg.MODEL.ROI_MASK_HEAD.CONV_LAYERS
-        dilation = cfg.MODEL.ROI_MASK_HEAD.DILATION
+        use_gn = cfg.MODEL.ROI_MASK_HEAD.USE_GN # false
+        layers = cfg.MODEL.ROI_MASK_HEAD.CONV_LAYERS #  (256, 256, 256, 256)
+        dilation = cfg.MODEL.ROI_MASK_HEAD.DILATION # 1
 
         next_feature = input_size
         self.blocks = []
+        # enumerate(.., start=0)
         for layer_idx, layer_features in enumerate(layers, 1):
             layer_name = "mask_fcn{}".format(layer_idx)
             module = make_conv3x3(
@@ -54,9 +55,11 @@ class MaskRCNNFPNFeatureExtractor(nn.Module):
             self.add_module(layer_name, module)
             next_feature = layer_features
             self.blocks.append(layer_name)
-        self.out_channels = layer_features
+        self.out_channels = layer_features # 256
 
     def forward(self, x, proposals):
+        # input x: list[Tensor], [5, [NCHW]]
+        # output x: Tensor[num_proposals,C,7,7]
         x = self.pooler(x, proposals)
 
         for layer_name in self.blocks:

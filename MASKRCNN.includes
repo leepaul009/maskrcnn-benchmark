@@ -1,0 +1,10 @@
+maskrcnn_benchmark/csrc
+maskrcnn_benchmark/csrc/cpu
+maskrcnn_benchmark/csrc/cuda
+tools
+cocoapi/common
+cocoapi/MatlabAPI/private
+tools/cityscapes
+cocoapi/PythonAPI/pycocotools
+configs
+maskrcnn_benchmark/config

@@ -7,10 +7,11 @@ from ..utils import cat
 
 import torch
 
+# input shape [N, A * 4, H, W], [N, A * 1, H, W], C = 1 or 4
 def permute_and_flatten(layer, N, A, C, H, W):
-    layer = layer.view(N, -1, C, H, W)
-    layer = layer.permute(0, 3, 4, 1, 2)
-    layer = layer.reshape(N, -1, C) # (N, AHW, C)
+    layer = layer.view(N, -1, C, H, W)   # => [N A C H W]
+    layer = layer.permute(0, 3, 4, 1, 2) # => [N H W A C]
+    layer = layer.reshape(N, -1, C)      # => [N HWA C]
     return layer
 
 

@@ -34,11 +34,13 @@ class BalancedPositiveNegativeSampler(object):
         """
         pos_idx = []
         neg_idx = []
+        # in box head's loss, for each img in a batch
         for matched_idxs_per_image in matched_idxs:
+            # get non-bg and bg index
             positive = torch.nonzero(matched_idxs_per_image >= 1).squeeze(1)
             negative = torch.nonzero(matched_idxs_per_image == 0).squeeze(1)
 
-            num_pos = int(self.batch_size_per_image * self.positive_fraction)
+            num_pos = int(self.batch_size_per_image * self.positive_fraction) # ex. 256*0.5
             # protect against not enough positive examples
             num_pos = min(positive.numel(), num_pos)
             num_neg = self.batch_size_per_image - num_pos
@@ -49,6 +51,7 @@ class BalancedPositiveNegativeSampler(object):
             perm1 = torch.randperm(positive.numel(), device=positive.device)[:num_pos]
             perm2 = torch.randperm(negative.numel(), device=negative.device)[:num_neg]
 
+            # get non-bg and bg index
             pos_idx_per_image = positive[perm1]
             neg_idx_per_image = negative[perm2]
 
@@ -59,6 +62,8 @@ class BalancedPositiveNegativeSampler(object):
             neg_idx_per_image_mask = torch.zeros_like(
                 matched_idxs_per_image, dtype=torch.bool
             )
+            # mask for proposal in same order,
+            # ex. proposal element of non-bg mask by 1
             pos_idx_per_image_mask[pos_idx_per_image] = 1
             neg_idx_per_image_mask[neg_idx_per_image] = 1
 

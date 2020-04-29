@@ -68,10 +68,10 @@ class RPNPostProcessor(torch.nn.Module):
 
         proposals = [
             cat_boxlist((proposal, gt_box))
-            for proposal, gt_box in zip(proposals, gt_boxes)
+            for proposal, gt_box in zip(proposals, gt_boxes) # ?for each of N
         ]
 
-        return proposals
+        return proposals # list[BoxList] BoxList.shape=[5*H*W*3+?, 4]
 
     def forward_for_single_feature_map(self, anchors, objectness, box_regression):
         """
@@ -83,22 +83,22 @@ class RPNPostProcessor(torch.nn.Module):
         device = objectness.device
         N, A, H, W = objectness.shape
 
-        # put in the same format as anchors # (N, AHW, C) => (N, AHW)
+        # modify tensor shape [N, A*1, H, W] => [N, H*W*A, 1] => [N, H*W*A]
         objectness = permute_and_flatten(objectness, N, A, 1, H, W).view(N, -1)
         objectness = objectness.sigmoid()
 
-        box_regression = permute_and_flatten(box_regression, N, A, 4, H, W) # (N, AHW, 4)
+        # modify tensor shape [N, A*41, H, W] => [N, H*W*A, 4]
+        box_regression = permute_and_flatten(box_regression, N, A, 4, H, W)
 
         num_anchors = A * H * W
-
         pre_nms_top_n = min(self.pre_nms_top_n, num_anchors)
-        objectness, topk_idx = objectness.topk(pre_nms_top_n, dim=1, sorted=True)
+        objectness, topk_idx = objectness.topk(pre_nms_top_n, dim=1, sorted=True) # [N, top_k_elems(H*W*A)]
 
         batch_idx = torch.arange(N, device=device)[:, None]
-        box_regression = box_regression[batch_idx, topk_idx]
+        box_regression = box_regression[batch_idx, topk_idx] # [N, top_k_elems(H*W*A), 4]
 
         image_shapes = [box.size for box in anchors] # list(tuple)
-        concat_anchors = torch.cat([a.bbox for a in anchors], dim=0) # list(3HW,4),list size=N => (N*3HW,4)
+        concat_anchors = torch.cat([a.bbox for a in anchors], dim=0) # list(3HW,4),list size=N => (N*AHW,4)
         concat_anchors = concat_anchors.reshape(N, -1, 4)[batch_idx, topk_idx]
 
         # box offsets + orig boxes => proposals(N*3HW, 4)
@@ -123,7 +123,7 @@ class RPNPostProcessor(torch.nn.Module):
                 score_field="objectness",
             )
             result.append(boxlist)
-        return result
+        return result # N*BoxList
 
     def forward(self, anchors, objectness, box_regression, targets=None):
         """
@@ -138,14 +138,15 @@ class RPNPostProcessor(torch.nn.Module):
         """
         sampled_boxes = []
         num_levels = len(objectness)
-        anchors = list(zip(*anchors)) # split anchors into list with size=5
+        anchors = list(zip(*anchors)) # list[N,5] => list[5,N]
         
-        # for each pyramid layer, output:list[list[tensor]], listSize=5xNxBoxList
+        # for each pyramid layer
+        # output sampled_boxes:list[list[BoxList]], shape=5*N*[BoxList]
         for a, o, b in zip(anchors, objectness, box_regression): 
             sampled_boxes.append(self.forward_for_single_feature_map(a, o, b))
 
-        boxlists = list(zip(*sampled_boxes)) # convert to Nx5xBoxList
-        boxlists = [cat_boxlist(boxlist) for boxlist in boxlists] # convert to NxBoxList
+        boxlists = list(zip(*sampled_boxes)) # convert to N*5*BoxList
+        boxlists = [cat_boxlist(boxlist) for boxlist in boxlists] # convert to N*BoxList
 
         if num_levels > 1:
             boxlists = self.select_over_all_levels(boxlists)

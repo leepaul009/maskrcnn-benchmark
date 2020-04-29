@@ -11,11 +11,11 @@ from maskrcnn_benchmark.modeling import registry
 class MaskRCNNC4Predictor(nn.Module):
     def __init__(self, cfg, in_channels):
         super(MaskRCNNC4Predictor, self).__init__()
-        num_classes = cfg.MODEL.ROI_BOX_HEAD.NUM_CLASSES
-        dim_reduced = cfg.MODEL.ROI_MASK_HEAD.CONV_LAYERS[-1]
-        num_inputs = in_channels
+        num_classes = cfg.MODEL.ROI_BOX_HEAD.NUM_CLASSES # ex. 81
+        dim_reduced = cfg.MODEL.ROI_MASK_HEAD.CONV_LAYERS[-1] # ex. 256
+        num_inputs = in_channels # ex. 256
 
-        self.conv5_mask = ConvTranspose2d(num_inputs, dim_reduced, 2, 2, 0)
+        self.conv5_mask = ConvTranspose2d(num_inputs, dim_reduced, 2, 2, 0) # deconvolution
         self.mask_fcn_logits = Conv2d(dim_reduced, num_classes, 1, 1, 0)
 
         for name, param in self.named_parameters():

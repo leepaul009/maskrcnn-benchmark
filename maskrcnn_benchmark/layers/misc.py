@@ -42,7 +42,8 @@ class Conv2d(torch.nn.Conv2d):
         output_shape = [x.shape[0], self.weight.shape[0]] + output_shape
         return _NewEmptyTensorOp.apply(x, output_shape)
 
-
+# H_out = (H_in - 1)*stride[0] - 2*padding[0] + dilation[0]*(kernel_size[0] - 1) + output_padding[0] + 1
+# W_out = (W_in - 1)*stride[1] - 2*padding[1] + dilation[1]*(kernel_size[1] - 1) + output_padding[1] + 1
 class ConvTranspose2d(torch.nn.ConvTranspose2d):
     def forward(self, x):
         if x.numel() > 0:
@@ -52,7 +53,7 @@ class ConvTranspose2d(torch.nn.ConvTranspose2d):
         output_shape = [
             (i - 1) * d - 2 * p + (di * (k - 1) + 1) + op
             for i, p, di, k, d, op in zip(
-                x.shape[-2:],
+                x.shape[-2:], # last 2 dims
                 self.padding,
                 self.dilation,
                 self.kernel_size,

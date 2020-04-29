@@ -69,26 +69,27 @@ class Pooler(nn.Module):
         self.output_size = output_size
         # get the levels in the feature map by leveraging the fact that the network always
         # downsamples by a factor of 2 at each level.
-        lvl_min = -torch.log2(torch.tensor(scales[0], dtype=torch.float32)).item()
-        lvl_max = -torch.log2(torch.tensor(scales[-1], dtype=torch.float32)).item()
+        lvl_min = -torch.log2(torch.tensor(scales[0], dtype=torch.float32)).item()  # ex. lvl_min=2
+        lvl_max = -torch.log2(torch.tensor(scales[-1], dtype=torch.float32)).item() # ex. lvl_max=5
         self.map_levels = LevelMapper(lvl_min, lvl_max)
 
     def convert_to_roi_format(self, boxes):
         concat_boxes = cat([b.bbox for b in boxes], dim=0)
         device, dtype = concat_boxes.device, concat_boxes.dtype
-        # ids list[BoxList],listSize=N
-        # Tensor.shape=[10AHW,4] that filled with list index(ex.0,1,...)
+        # ids: Tensor[num_imgs*bbox_dim0, 1]
         ids = cat(
             [
                 torch.full((len(b), 1), i, dtype=dtype, device=device)
-                for i, b in enumerate(boxes) # index and tensor 
+                for i, b in enumerate(boxes)
             ],
             dim=0,
         )
-        rois = torch.cat([ids, concat_boxes], dim=1) # Nx2xBoxList
+        # rois: Tensor[num_imgs*bbox_dim0, 1+bbox_dim1]
+        rois = torch.cat([ids, concat_boxes], dim=1) 
         return rois
 
-    # boxes list[BoxList], listSize=N, BoxList.bbox is Tensor and shape=[10AHW, 4]
+    # x: pyramid feature map
+    # boxes: proposals list[BoxList], shape[num_imgs, [BoxList]],  BoxList.bbox: Tensor[?,4]
     def forward(self, x, boxes):
         """
         Arguments:
@@ -106,11 +107,11 @@ class Pooler(nn.Module):
 
         num_rois = len(rois) # assume N?
         num_channels = x[0].shape[1]
-        output_size = self.output_size[0] # output_size:(7,7)
+        output_size = self.output_size[0] # output_size:(7,7) or (14,14)
 
         dtype, device = x[0].dtype, x[0].device
         result = torch.zeros(
-            (num_rois, num_channels, output_size, output_size), # [N,C,7,7]
+            (num_rois, num_channels, output_size, output_size), # [num_proposals,C,7,7] or [num_proposals,C,14,14]
             dtype=dtype,
             device=device,
         )
